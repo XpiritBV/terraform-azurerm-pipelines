@@ -1,0 +1,75 @@
+name: "Terraform Validate and Plan"
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+    workflow_call:
+        inputs:
+            example-directory:
+                default: "examples/defaults"
+                type: string
+            source-directory:
+                default: "src"
+                type: string
+            oidc-subscription-id:
+                default: "26995ed0-e32c-4de1-a7e6-00e42515a9cf"
+                type: string
+            oidc-tenant-id:
+                default: "7c610feb-cf42-415e-8505-b64523147f9f"
+                type: string
+            oidc-client-id:
+                default: "43d1d79d-db04-425d-b3ae-1827cad1df49"
+                type: string
+
+env:
+    TERRAFORM_VERSION: "1.5.3"
+
+jobs:
+    validate_terraform:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v2
+
+            - name: Set up Terraform
+              uses: hashicorp/setup-terraform@v1
+              with:
+                    terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+            - name: Install tflint & Checkov
+              run: |
+                    curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+                    pip install checkov                  
+
+            - name: Run tflint
+              working-directory: ${{ inputs.source-directory }}
+              run: |
+                    curl -O https://raw.githubusercontent.com/XpiritBV/terraform-azurerm-pipelines/main/.tflint.hcl
+                    tflint --init --config .tflint.hcl
+                    tflint --recursive --config .tflint.hcl
+    
+            - name: Run Checkov
+              continue-on-error: true
+              run: |
+                    checkov -d ${{ inputs.source-directory }}
+
+            - name: 'Az CLI login'
+              uses: azure/login@v1
+              with:
+                  client-id: ${{ inputs.oidc-client-id }}
+                  tenant-id: ${{ inputs.oidc-tenant-id }}
+                  subscription-id: ${{ inputs.oidc-subscription-id }}
+
+            - name: Terraform validate and plan
+              working-directory: ${{ inputs.example-directory }}
+              run: |
+                    export ARM_SUBSCRIPTION_ID=${{ inputs.oidc-subscription-id }}
+                    export ARM_TENANT_ID=${{ inputs.oidc-tenant-id }}
+                    export ARM_CLIENT_ID=${{ inputs.oidc-client-id }}
+                    export ARM_USE_OIDC=true
+                    terraform init -backend=false
+                    terraform validate
+                    terraform plan
