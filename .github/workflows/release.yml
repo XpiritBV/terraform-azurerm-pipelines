@@ -1,0 +1,14 @@
+name: "Create tag and release"
+
+permissions:
+    contents: write
+    pull-requests: read
+
+on:
+    push:
+      branches:
+        - main
+
+jobs:
+    release:
+        uses: ./.github/workflows/terraform-module-release.yml

@@ -1,0 +1,22 @@
+name: "Create tag and release for given repository"
+
+on:
+    workflow_call:
+
+jobs:
+    create-release:
+        runs-on: ubuntu-latest
+
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        steps:
+            - uses: rymndhng/release-on-push-action@master
+              id: release
+              with:
+                bump_version_scheme: patch
+
+            - name: Check Output Parameters
+              run: |
+                  echo "Got tag name ${{ steps.release.outputs.tag_name }}"
+                  echo "Got release version ${{ steps.release.outputs.version }}"
+                  echo "Upload release artifacts to ${{ steps.release.outputs.upload_url }}"
