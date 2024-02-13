@@ -35,10 +35,9 @@ jobs:
               with:
                     terraform_version: ${{ env.TERRAFORM_VERSION }}              
 
-            - name: Install tflint & Checkov
+            - name: Install tflint
               run: |
-                    curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-                    pip install checkov                  
+                    curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash                
 
             - name: Run tflint
               working-directory: ${{ inputs.source-directory }}
@@ -46,11 +45,14 @@ jobs:
                     curl -O https://raw.githubusercontent.com/XpiritBV/terraform-azurerm-pipelines/main/.tflint.hcl
                     tflint --init --config .tflint.hcl
                     tflint --recursive --config .tflint.hcl
-    
-            - name: Run Checkov
+
+            - name: Test with Checkov
+              id: checkov
+              uses: bridgecrewio/checkov-action@v12
               continue-on-error: true
-              run: |
-                    checkov -d ${{ inputs.source-directory }}
+              with:
+                directory: ${{ inputs.source-directory }}
+                framework: terraform          
 
             - name: 'Az CLI login'
               uses: azure/login@v1
