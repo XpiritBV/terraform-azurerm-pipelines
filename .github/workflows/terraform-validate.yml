@@ -72,47 +72,28 @@ jobs:
                     export ARM_USE_OIDC=true
                     terraform init -backend=false
                     terraform validate
-                    PLAN=$(terraform plan -no-color -detailed-exitcode | tr '\n' '<br>')
-                    echo "::set-output name=plan::$PLAN"
+
+                    terraform plan -detailed-exitcode -out terraform.plan 2>&1 || true
+                    tf_exitcode=$?
+                    echo "Exitcode: $tf_exitcode"
+                    
+                    terraform show -no-color terraform.plan > terraform.text
+                    terraform show -json terraform.plan > terraform.json
+
+                    echo "::set-output name=exitcode::$tf_exitcode"
 
             - name: Update PR
-              uses: actions/github-script@v7
+              uses: ahmadnassri/action-terraform-report@v3
               if: github.event_name == 'pull_request'
 
               id: plan-comment
               with:
-                script: |
-                    // 1. Retrieve existing bot comments for the PR
-                    const { data: comments } = await github.rest.issues.listComments({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: context.issue.number,
-                    });
-                    const botComment = comments.find(comment => {
-                      return comment.user.type === 'Bot' && comment.body.includes('Terraform Plan Output')
-                    });
-                    const output = `#### :rocket: Terraform Plan Output
+                # tell the action the plan outputs
+                terraform-text: ${{ github.workspace }}/terraform.text
+                terraform-json: ${{ github.workspace }}/terraform.json
+                remove-stale-reports: true
 
-                    \`\`\`
-                    ${{  steps.plan.outputs.plan }}
-                    \`\`\``;
-                    // 3. Delete previous comment so PR timeline makes sense
-                    if (botComment) {
-                      github.rest.issues.deleteComment({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        comment_id: botComment.id,
-                      });
-                    }
-                    github.rest.issues.createComment({
-                      issue_number: context.issue.number,
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      body: output
-                    });
-
-            # TODO
-            # - name: Use terraform plan exit code
-            #   # Terraform plan exit code 0 or 2 are acceptable, see: https://developer.hashicorp.com/terraform/cli/commands/plan#detailed-exitcode
-            #   if: steps.plan.outputs.exitcode != 2
-            #   run: exit ${{ steps.plan.outputs.exitcode }}
+            - name: Use terraform plan exit code
+              # Terraform plan exit code 0 or 2 are acceptable, see: https://developer.hashicorp.com/terraform/cli/commands/plan#detailed-exitcode
+              if: steps.plan.outputs.exitcode != '2'
+              run: exit ${{ steps.plan.outputs.exitcode }}
